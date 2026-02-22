@@ -4,7 +4,9 @@ I need to validate that each part of the MagicRadio2 works on its own. Namely:
 - [x] Audio Playback via PyGame on the RPi5 with the Adafruit DAC hat
 - [ ] Tactile Input directly on the RPi5 for volume, mute, mode switches
     - [ ] Digital Input via GPIO pins
-    - [ ] Analog Input via GPIO pins
+    - [x] ~~Analog Input via GPIO pins~~
+        - [x] RPi5 has no analog GPIO pins / onboard ADC. Use ADS1115 over I2C
+
 - [x] Neopixel Lighting Control on the RPi5
 - [ ] Servo control on the RPi5
 - [ ] GPIO Driven shutdown / reboot
