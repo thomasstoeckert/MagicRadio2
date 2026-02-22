@@ -8,7 +8,8 @@ I need to validate that each part of the MagicRadio2 works on its own. Namely:
         - [x] RPi5 has no analog GPIO pins / onboard ADC. Use ADS1115 over I2C
 
 - [x] Neopixel Lighting Control on the RPi5
-- [ ] Servo control on the RPi5
+- [x] ~~Servo control on the RPi5~~
+    - [x] RPi5 software control of servo SUCKS. Jittery, bad timing. Use external PCA/Servokit
 - [ ] GPIO Driven shutdown / reboot
 # Stage 2: Implement the main control process
 - [ ] Spawn a dummy service
