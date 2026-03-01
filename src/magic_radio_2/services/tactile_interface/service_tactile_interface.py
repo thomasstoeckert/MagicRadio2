@@ -1,12 +1,8 @@
-try:
-    # from ..standard_service import StandardService
-    from ...definitions.pin_definitions import *
-    from ...definitions.tag_definitions import *
-except:
-    # from src.magic_radio_2.services.standard_service import StandardService
-    from src.magic_radio_2.definitions.pin_definitions import *
-    from src.magic_radio_2.definitions.tag_definitions import *
-from gpiozero import Button
+# from ..standard_service import StandardService
+from ...definitions.pin_definitions import *
+from ...definitions.tag_definitions import *
+
+from gpiozero import Button, RotaryEncoder
 
 # Tactile interface server
 # Exposes:
@@ -38,13 +34,16 @@ class ServiceTactileInterface:
 
     # Mute Switch
     _btn_mute:Button
+
+    # Tuner Encoder
+    _enc_tuner:RotaryEncoder
     #endregion
 
     _callbacks = []
 
     def start_service(self):
         self._initialize_digital_inputs()
-
+        self._initialize_encoder_inputs()
 
     def stop_service(self):
         pass
@@ -89,6 +88,15 @@ class ServiceTactileInterface:
 
         # Mute Switch
         self._btn_mute:Button = self._init_button(PIN_BUTTON_MUTE, TAG_SWITCH_MUTE)
+    
+    def _internal_encoder_callback(self, tag:str, encoder:RotaryEncoder):
+        new_value = encoder.value
+        self._emit_callback(tag, new_value)
+
+    def _initialize_encoder_inputs(self):
+        self._enc_tuner = RotaryEncoder(PIN_ENCODER_TUNE_A, PIN_ENCODER_TUNE_B, wrap=True, max_steps=0)
+        self._enc_tuner.when_rotated_clockwise = (lambda t=TAG_ENCODER_TUNE_UP, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
+        self._enc_tuner.when_rotated_counter_clockwise = (lambda t=TAG_ENCODER_TUNE_DOWN, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
 
 if __name__=="__main__":
     from signal import pause
