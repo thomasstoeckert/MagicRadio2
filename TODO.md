@@ -6,7 +6,9 @@ I need to validate that each part of the MagicRadio2 works on its own. Namely:
     - [ ] Digital Input via GPIO pins
     - [x] ~~Analog Input via GPIO pins~~
         - [x] RPi5 has no analog GPIO pins / onboard ADC. Use ADS1115 over I2C
-
+    - [x] ~~Rotary Encoder Input via GPIO pins~~
+        - [x] Basic rotary encoders I bought had detents. Felt gross.
+        - [x] Swapped out with 652-PEC12R-4022F-S0024 zero-detent pushbutton encoders. Buttery smooth.
 - [x] Neopixel Lighting Control on the RPi5
 - [x] ~~Servo control on the RPi5~~
     - [x] RPi5 software control of servo SUCKS. Jittery, bad timing. Use external PCA/Servokit
