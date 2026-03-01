@@ -2,8 +2,8 @@
 I need to validate that each part of the MagicRadio2 works on its own. Namely:
 ## Hardware Validation
 - [x] Audio Playback via PyGame on the RPi5 with the Adafruit DAC hat
-- [ ] Tactile Input directly on the RPi5 for volume, mute, mode switches
-    - [ ] Digital Input via GPIO pins
+- [x] Tactile Input directly on the RPi5 for volume, mute, mode switches
+    - [x] ~~Digital Input via GPIO pins~~
     - [x] ~~Analog Input via GPIO pins~~
         - [x] RPi5 has no analog GPIO pins / onboard ADC. Use ADS1115 over I2C
     - [x] ~~Rotary Encoder Input via GPIO pins~~
