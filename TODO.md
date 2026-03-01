@@ -10,6 +10,8 @@ I need to validate that each part of the MagicRadio2 works on its own. Namely:
 - [x] Neopixel Lighting Control on the RPi5
 - [x] ~~Servo control on the RPi5~~
     - [x] RPi5 software control of servo SUCKS. Jittery, bad timing. Use external PCA/Servokit
+    - [x] Cheapo KY66 plastic servos are too loud. Replace with MG90S metal gear servos.
+    - [x] Play back curve data from a CSV on a servo
 - [ ] GPIO Driven shutdown / reboot
 # Stage 2: Implement the main control process
 - [ ] Spawn a dummy service
