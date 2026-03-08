@@ -3,6 +3,10 @@ from ...definitions.pin_definitions import *
 from ...definitions.tag_definitions import *
 
 from gpiozero import Button, RotaryEncoder
+import busio
+import board
+import asyncio
+from adafruit_ads1x15 import ADS1115, AnalogIn, ads1x15
 
 # Tactile interface server
 # Exposes:
@@ -37,6 +41,21 @@ class ServiceTactileInterface:
 
     # Tuner Encoder
     _enc_tuner:RotaryEncoder
+
+    # ADS Input
+    _ads_board:ADS1115
+    _ads_analog_in:AnalogIn
+    _ads_rolling_window_size = 4
+    _ads_rolling_window:list
+    _ads_rolling_idx:int
+    _ads_min_value = 1
+    _ads_max_value = 0x8000
+    _ads_average_value:int
+
+    _ads_enable_service = False
+    _ads_polling_service = None
+    _ads_polling_rate_ms = 25
+    _ads_polling_threshold = 10
     #endregion
 
     _callbacks = []
@@ -44,6 +63,7 @@ class ServiceTactileInterface:
     def start_service(self):
         self._initialize_digital_inputs()
         self._initialize_encoder_inputs()
+        self._initialize_analog_inputs()
 
     def stop_service(self):
         pass
@@ -97,6 +117,48 @@ class ServiceTactileInterface:
         self._enc_tuner = RotaryEncoder(PIN_ENCODER_TUNE_A, PIN_ENCODER_TUNE_B, wrap=True, max_steps=0)
         self._enc_tuner.when_rotated_clockwise = (lambda t=TAG_ENCODER_TUNE_UP, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
         self._enc_tuner.when_rotated_counter_clockwise = (lambda t=TAG_ENCODER_TUNE_DOWN, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
+    
+    def _initialize_analog_inputs(self):
+        i2c_bus = busio.I2C(board.SCL, board.SDA)
+        self._ads_board = ADS1115(i2c_bus)
+        self._ads_analog_in = AnalogIn(self._ads_board, ads1x15.Pin.A0)
+
+        # Prepare our window
+        self._ads_average_value = self._ads_analog_in.value
+        self._ads_rolling_window = [self._ads_average_value] * self._ads_rolling_window_size
+        self._ads_rolling_idx = 0
+        
+        # Establish the polling method that's going to grab our data
+        self._ads_enable_service = True
+
+        # Start our polling service
+        self._ads_polling_service = asyncio.run(self._analog_polling_service_task())
+
+    async def _analog_polling_service_task(self):
+        while self._ads_enable_service:
+            # Sample data from our analog input
+            raw_value = self._ads_analog_in.value
+
+            # Clamp our raw value to our allowed min / max values
+            clamp_value = self._ads_min_value if raw_value < self._ads_min_value else raw_value
+            clamp_value = self._ads_max_value if raw_value > self._ads_max_value else raw_value
+
+            # Place it into our window
+            self._ads_rolling_window[self._ads_rolling_idx] = clamp_value
+            # Increment our window
+            self._ads_rolling_idx += 1
+            if(self._ads_rolling_idx >= self._ads_rolling_window_size):
+                self._ads_rolling_idx = self._ads_rolling_idx % self._ads_rolling_window_size
+            
+            # Calculate our new average
+            new_average = sum(self._ads_rolling_window) / self._ads_rolling_window_size
+            delta_value = abs(new_average - self._ads_average_value)
+            if(delta_value > self._ads_polling_threshold):
+                self._emit_callback(TAG_ANALOG_VOLUME_CHANGE, new_average)
+                self._ads_average_value = new_average
+
+            # Sleep
+            await asyncio.sleep(self._ads_polling_rate_ms / 1000)
 
 if __name__=="__main__":
     from signal import pause
