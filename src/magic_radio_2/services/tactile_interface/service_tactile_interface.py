@@ -50,17 +50,7 @@ class ServiceTactileInterface:
     # ADS Input
     _ads_board:ADS1115
     _ads_analog_in:AnalogIn
-    _ads_rolling_window_size = 4
-    _ads_rolling_window:list
-    _ads_rolling_idx:int
-    _ads_min_value = 1
     _ads_max_value = 0x8000
-    _ads_average_value:int
-
-    _ads_enable_service = False
-    _ads_polling_service = None
-    _ads_polling_rate_ms = 25
-    _ads_polling_threshold = 10
     #endregion
 
     _callbacks = []
@@ -141,53 +131,20 @@ class ServiceTactileInterface:
         self._enc_tuner.when_rotated_clockwise = (lambda t=TAG_ENCODER_TUNE_UP, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
         self._enc_tuner.when_rotated_counter_clockwise = (lambda t=TAG_ENCODER_TUNE_DOWN, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
     
+    def _internal_tuner_callback(self):
+        # Get the current tuner value (float)
+        raw_tuner_value = self._adc_input_device.value
+        # Scale from 0.0 to 1.0
+        ratio_tuner_value = raw_tuner_value / self._ads_max_value
+        # Scale from 0.0 to 100.0
+        ratio_tuner_value = ratio_tuner_value
+        self._emit_callback(TAG_ANALOG_VOLUME_CHANGE, ratio_tuner_value)
+    
     def _initialize_analog_inputs(self, i2c_bus):
         self._ads_board = ADS1115(i2c_bus)
         self._ads_analog_in = AnalogIn(self._ads_board, ads1x15.Pin.A0)
-        print("Hello?")
-
-        print(f"Initial analog value: {self._ads_analog_in.value}")
         self._adc_input_device = AnalogInInputDevice(self._ads_analog_in)
-        self._adc_input_device._queue.when_breached = (lambda t=TAG_ANALOG_VOLUME_CHANGE: self._emit_callback(t, float(self._adc_input_device.value) / self._ads_max_value * 100.0))
-        print("Passed setup")
-        # self._adc_input_device.when_activated = (lambda t=TAG_ANALOG_VOLUME_CHANGE: self._emit_callback(t, float(self._adc_input_device.value) / self._ads_max_value * 100.0))
-
-        # # Prepare our window
-        # self._ads_average_value = self._ads_analog_in.value
-        # self._ads_rolling_window = [self._ads_average_value] * self._ads_rolling_window_size
-        # self._ads_rolling_idx = 0
-        
-        # # Establish the polling method that's going to grab our data
-        # self._ads_enable_service = True
-
-        # # Start our polling service
-        # self._ads_polling_service = asyncio.run(self._analog_polling_service_task())
-
-    async def _analog_polling_service_task(self):
-        while self._ads_enable_service:
-            # Sample data from our analog input
-            raw_value = self._ads_analog_in.value
-
-            # Clamp our raw value to our allowed min / max values
-            clamp_value = self._ads_min_value if raw_value < self._ads_min_value else raw_value
-            clamp_value = self._ads_max_value if raw_value > self._ads_max_value else raw_value
-
-            # Place it into our window
-            self._ads_rolling_window[self._ads_rolling_idx] = clamp_value
-            # Increment our window
-            self._ads_rolling_idx += 1
-            if(self._ads_rolling_idx >= self._ads_rolling_window_size):
-                self._ads_rolling_idx = self._ads_rolling_idx % self._ads_rolling_window_size
-            
-            # Calculate our new average
-            new_average = sum(self._ads_rolling_window) / self._ads_rolling_window_size
-            delta_value = abs(new_average - self._ads_average_value)
-            if(delta_value > self._ads_polling_threshold):
-                self._emit_callback(TAG_ANALOG_VOLUME_CHANGE, new_average)
-                self._ads_average_value = new_average
-
-            # Sleep
-            await asyncio.sleep(self._ads_polling_rate_ms / 1000)
+        self._adc_input_device._queue.when_breached = self._internal_tuner_callback
     
     def _initialize_servo_output(self, i2c_bus):
         self._servo_kit = ServoKit(i2c=i2c_bus, channels=16, address=0x40)
@@ -215,7 +172,13 @@ if __name__=="__main__":
         if(event == TAG_ENCODER_TUNE_DOWN or event == TAG_ENCODER_TUNE_UP):
             sti.receive_event(TAG_SET_SERVO, tune_value)
     
+    def set_scale_on_callback(event, value):
+        global tune_multiplier
+        if(event == TAG_ANALOG_VOLUME_CHANGE):
+            tune_multiplier = value * 90.0
+    
     sti.register_callback(move_servo_on_callback)
+    sti.register_callback(set_scale_on_callback)
 
     sti.start_service()
     from signal import pause
