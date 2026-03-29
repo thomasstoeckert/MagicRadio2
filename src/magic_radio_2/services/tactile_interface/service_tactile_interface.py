@@ -1,6 +1,7 @@
 # from ..standard_service import StandardService
 from ...definitions.pin_definitions import *
 from ...definitions.tag_definitions import *
+from .adc_input_device import AnalogInInputDevice
 
 from gpiozero import Button, RotaryEncoder
 import busio
@@ -80,7 +81,7 @@ class ServiceTactileInterface:
 
         self._initialize_digital_inputs()
         self._initialize_encoder_inputs()
-        # self._initialize_analog_inputs(i2c_bus)
+        self._initialize_analog_inputs(i2c_bus)
         self._initialize_servo_output(i2c_bus)
 
     def stop_service(self):
@@ -101,7 +102,7 @@ class ServiceTactileInterface:
         if(tag == TAG_SET_SERVO):
             self._servo.angle = value
     
-    def _emit_callback(self, tag:str, value:bool):
+    def _emit_callback(self, tag:str, value:any):
         print(f"STI: EMIT EVENT {tag} VALUE {value}")
         for callback in self._callbacks:
             callback(tag, value)
@@ -143,17 +144,24 @@ class ServiceTactileInterface:
     def _initialize_analog_inputs(self, i2c_bus):
         self._ads_board = ADS1115(i2c_bus)
         self._ads_analog_in = AnalogIn(self._ads_board, ads1x15.Pin.A0)
+        print("Hello?")
 
-        # Prepare our window
-        self._ads_average_value = self._ads_analog_in.value
-        self._ads_rolling_window = [self._ads_average_value] * self._ads_rolling_window_size
-        self._ads_rolling_idx = 0
+        print(f"Initial analog value: {self._ads_analog_in.value}")
+        self._adc_input_device = AnalogInInputDevice(self._ads_analog_in)
+        self._adc_input_device._queue.when_breached = (lambda t=TAG_ANALOG_VOLUME_CHANGE: self._emit_callback(t, float(self._adc_input_device.value) / self._ads_max_value * 100.0))
+        print("Passed setup")
+        # self._adc_input_device.when_activated = (lambda t=TAG_ANALOG_VOLUME_CHANGE: self._emit_callback(t, float(self._adc_input_device.value) / self._ads_max_value * 100.0))
+
+        # # Prepare our window
+        # self._ads_average_value = self._ads_analog_in.value
+        # self._ads_rolling_window = [self._ads_average_value] * self._ads_rolling_window_size
+        # self._ads_rolling_idx = 0
         
-        # Establish the polling method that's going to grab our data
-        self._ads_enable_service = True
+        # # Establish the polling method that's going to grab our data
+        # self._ads_enable_service = True
 
-        # Start our polling service
-        self._ads_polling_service = asyncio.run(self._analog_polling_service_task())
+        # # Start our polling service
+        # self._ads_polling_service = asyncio.run(self._analog_polling_service_task())
 
     async def _analog_polling_service_task(self):
         while self._ads_enable_service:
