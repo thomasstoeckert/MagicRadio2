@@ -7,6 +7,7 @@ import busio
 import board
 import asyncio
 from adafruit_ads1x15 import ADS1115, AnalogIn, ads1x15
+from adafruit_servokit import ServoKit
 
 # Tactile interface server
 # Exposes:
@@ -14,9 +15,12 @@ from adafruit_ads1x15 import ADS1115, AnalogIn, ads1x15
 # - Mode Switch
 # - Volume Value
 # - Volume on/off (mute)
+# <complete>
+#
 # Controls:
 # - Tuning Display Servo
 # - Tuning Display RGB
+#
 # Emits:
 # - Tuning Value Changed Event
 # - Mode Switch Changed Event
@@ -60,10 +64,24 @@ class ServiceTactileInterface:
 
     _callbacks = []
 
+    #region Output Devices
+    _servo_kit:ServoKit
+    _servo = None
+    # Per manufacturer's spec - 500us is 0°, 2500us is 180°
+    # https://www.amazon.com/dp/B0CP98TZJ2?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1
+    _servo_min_pulse_width = 500
+    _servo_max_pulse_width = 2500
+    #endregion
+
+
     def start_service(self):
+        # Initialize i2c bus
+        i2c_bus = busio.I2C(board.SCL, board.SDA)
+
         self._initialize_digital_inputs()
         self._initialize_encoder_inputs()
-        self._initialize_analog_inputs()
+        # self._initialize_analog_inputs(i2c_bus)
+        self._initialize_servo_output(i2c_bus)
 
     def stop_service(self):
         pass
@@ -78,6 +96,10 @@ class ServiceTactileInterface:
             return True
         except:
             return False
+    
+    def receive_event(self, tag, value):
+        if(tag == TAG_SET_SERVO):
+            self._servo.angle = value
     
     def _emit_callback(self, tag:str, value:bool):
         print(f"STI: EMIT EVENT {tag} VALUE {value}")
@@ -118,8 +140,7 @@ class ServiceTactileInterface:
         self._enc_tuner.when_rotated_clockwise = (lambda t=TAG_ENCODER_TUNE_UP, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
         self._enc_tuner.when_rotated_counter_clockwise = (lambda t=TAG_ENCODER_TUNE_DOWN, enc=self._enc_tuner: self._internal_encoder_callback(t, enc))
     
-    def _initialize_analog_inputs(self):
-        i2c_bus = busio.I2C(board.SCL, board.SDA)
+    def _initialize_analog_inputs(self, i2c_bus):
         self._ads_board = ADS1115(i2c_bus)
         self._ads_analog_in = AnalogIn(self._ads_board, ads1x15.Pin.A0)
 
@@ -159,9 +180,35 @@ class ServiceTactileInterface:
 
             # Sleep
             await asyncio.sleep(self._ads_polling_rate_ms / 1000)
+    
+    def _initialize_servo_output(self, i2c_bus):
+        self._servo_kit = ServoKit(i2c=i2c_bus, channels=16, address=0x40)
+        self._servo = self._servo_kit.servo[PIN_SERVO_INDEX]
+        self._servo.set_pulse_width_range(self._servo_min_pulse_width, self._servo_max_pulse_width)
+        # Home the servo.
+        self._servo.angle = 0.0
 
 if __name__=="__main__":
-    from signal import pause
+
     sti = ServiceTactileInterface()
+
+    tune_value = 0.0
+    tune_multiplier = 2.0
+    def move_servo_on_callback(event, value):
+        global tune_value
+        if(event == TAG_ENCODER_TUNE_UP):
+            tune_value += (1.0 * tune_multiplier)
+
+        if(event == TAG_ENCODER_TUNE_DOWN):
+            tune_value -= (1.0 * tune_multiplier)
+        if(tune_value >= 180.0): tune_value = 179.0
+        if(tune_value < 0.0): tune_value = 0.0
+        
+        if(event == TAG_ENCODER_TUNE_DOWN or event == TAG_ENCODER_TUNE_UP):
+            sti.receive_event(TAG_SET_SERVO, tune_value)
+    
+    sti.register_callback(move_servo_on_callback)
+
     sti.start_service()
+    from signal import pause
     pause()
